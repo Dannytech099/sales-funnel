@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>RevFlow CRM — Smart Sales Conversion Funnel (Interactive Preview)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 antialiased">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    const INITIAL_STAGES = [
+      { id: 'st-1', slug: 'new-prospect', name: 'New Prospect', order: 1, defaultProbability: 10, colorHex: '#64748B', isWon: false, isLost: false, isActive: true },
+      { id: 'st-2', slug: 'contacted', name: 'Contacted', order: 2, defaultProbability: 20, colorHex: '#3B82F6', isWon: false, isLost: false, isActive: true },
+      { id: 'st-3', slug: 'qualified', name: 'Qualified', order: 3, defaultProbability: 40, colorHex: '#6366F1', isWon: false, isLost: false, isActive: true },
+      { id: 'st-4', slug: 'meeting-scheduled', name: 'Meeting Scheduled', order: 4, defaultProbability: 55, colorHex: '#8B5CF6', isWon: false, isLost: false, isActive: true },
+      { id: 'st-5', slug: 'proposal-sent', name: 'Proposal Sent', order: 5, defaultProbability: 70, colorHex: '#F59E0B', isWon: false, isLost: false, isActive: true },
+      { id: 'st-6', slug: 'negotiation', name: 'Negotiation', order: 6, defaultProbability: 85, colorHex: '#EC4899', isWon: false, isLost: false, isActive: true },
+      { id: 'st-7', slug: 'won', name: 'Won', order: 7, defaultProbability: 100, colorHex: '#10B981', isWon: true, isLost: false, isActive: true },
+      { id: 'st-8', slug: 'lost', name: 'Lost', order: 8, defaultProbability: 0, colorHex: '#EF4444', isWon: false, isLost: true, isActive: true },
+    ];
+
+    const USERS = [
+      { id: 'u-1', name: 'Adaeze Okonkwo', email: 'admin@revflow.io', role: 'ADMIN', monthlyQuota: 150000, maxDiscount: 35 },
+      { id: 'u-2', name: 'Tunde Bakare', email: 'tunde@revflow.io', role: 'SALES_REP', monthlyQuota: 80000, maxDiscount: 15 },
+      { id: 'u-3', name: 'Claire Vance', email: 'claire@revflow.io', role: 'SALES_REP', monthlyQuota: 75000, maxDiscount: 15 },
+    ];
+
+    const PRODUCTS = [
+      { id: 'p-1', sku: 'REV-ENT-YR', name: 'RevFlow Enterprise Annual License', unitPrice: 24000, billing: 'ANNUAL' },
+      { id: 'p-2', sku: 'REV-GROWTH-YR', name: 'RevFlow Growth Suite (Annual)', unitPrice: 9600, billing: 'ANNUAL' },
+      { id: 'p-3', sku: 'IMP-ONBOARD', name: 'White-Glove Migration & Onboarding', unitPrice: 3500, billing: 'ONE_TIME' },
+    ];
+
+    const TEMPLATES = [
+      { id: 'tpl-1', name: 'Qualified Discovery Recap', channel: 'EMAIL', subject: 'Next steps for {{companyName}} & RevFlow', body: 'Hi {{contactName}},\n\nGreat speaking with you today! Based on your priorities at {{companyName}}, I am preparing a tailored {{dealValue}} rollout proposal.\n\nBest,\n{{repName}}' },
+      { id: 'tpl-2', name: 'WhatsApp Quick Nudge', channel: 'WHATSAPP', subject: '', body: 'Hi {{contactName}}, quick check-in regarding your RevFlow rollout for {{companyName}}. Let me know if you need anything before procurement review!' },
+    ];
+
+    const INITIAL_DEALS = [
+      {
+        id: 'd-1',
+        title: 'PayBridge Enterprise Rollout',
+        stageId: 'st-6',
+        ownerId: 'u-2',
+        value: 27500,
+        probability: 85,
+        createdAt: new Date(Date.now() - 12 * 86400000).toISOString(),
+        lastActivityAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+        closedAt: null,
+        lostReason: null,
+        aiScore: 88,
+        customer: {
+          companyName: 'PayBridge Africa',
+          contactName: 'Chidi Nnamdi',
+          email: 'chidi@paybridge.africa',
+          whatsappNumber: '+2348091112233',
+          segment: 'ENTERPRISE',
+          emailOptIn: true,
+          whatsappOptIn: true,
+          doNotContact: false,
+        },
+        activities: [
+          { id: 'a-1', type: 'WHATSAPP_SENT', summary: 'Sent security & SOC2 compliance packet via WhatsApp.', at: new Date(Date.now() - 2 * 86400000).toISOString() },
+          { id: 'a-2', type: 'STAGE_CHANGE', summary: 'Moved from Proposal Sent to Negotiation', at: new Date(Date.now() - 3 * 86400000).toISOString() },
+        ],
+        notes: [{ id: 'n-1', author: 'Tunde Bakare', content: 'VP Revenue wants 10% multi-year discount if signed before Friday.', at: new Date(Date.now() - 2 * 86400000).toISOString() }],
+        communications: [{ id: 'c-1', channel: 'WHATSAPP', subject: '', body: 'Hi Chidi, shared the SOC2 packet and pricing schedule.', status: 'DELIVERED', at: new Date(Date.now() - 2 * 86400000).toISOString() }],
+        proposals: [{ id: 'pr-1', number: 'PROP-40219', title: 'PayBridge Enterprise Rollout', total: 27500, discountPercent: 0, status: 'SENT', signerName: null, signedAt: null }],
+        invoices: [],
+      },
+      {
+        id: 'd-2',
+        title: 'Kora Fleet Sales Funnel Expansion',
+        stageId: 'st-3',
+        ownerId: 'u-2',
+        value: 13100,
+        probability: 40,
+        createdAt: new Date(Date.now() - 6 * 86400000).toISOString(),
+        lastActivityAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+        closedAt: null,
+        lostReason: null,
+        aiScore: 67,
+        customer: {
+          companyName: 'Kora Logistics',
+          contactName: 'Zainab Bello',
+          email: 'zbello@koralogistics.com',
+          whatsappNumber: '+2348023334455',
+          segment: 'MID_MARKET',
+          emailOptIn: true,
+          whatsappOptIn: false,
+          doNotContact: false,
+        },
+        activities: [{ id: 'a-3', type: 'CALL_LOGGED', summary: 'Discovery call: 18 sales reps need automated follow-up reminders.', at: new Date(Date.now() - 2 * 86400000).toISOString() }],
+        notes: [],
+        communications: [{ id: 'c-2', channel: 'PHONE', subject: 'Discovery Call', body: 'Budget confirmed for Q4. Needs onboarding in 2 weeks.', status: 'LOGGED', at: new Date(Date.now() - 2 * 86400000).toISOString() }],
+        proposals: [],
+        invoices: [],
+      },
+      {
+        id: 'd-3',
+        title: 'Verve Omnichannel Conversion Suite',
+        stageId: 'st-5',
+        ownerId: 'u-3',
+        value: 9600,
+        probability: 70,
+        createdAt: new Date(Date.now() - 9 * 86400000).toISOString(),
+        lastActivityAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+        closedAt: null,
+        lostReason: null,
+        aiScore: 61,
+        customer: {
+          companyName: 'Verve Retail Group',
+          contactName: 'Amaka Eze',
+          email: 'amaka@ververetail.ng',
+          whatsappNumber: '+2348035557788',
+          segment: 'MID_MARKET',
+          emailOptIn: true,
+          whatsappOptIn: true,
+          doNotContact: false,
+        },
+        activities: [{ id: 'a-4', type: 'PROPOSAL_CREATED', summary: 'Sent Proposal PROP-39810 ($9,600)', at: new Date(Date.now() - 5 * 86400000).toISOString() }],
+        notes: [],
+        communications: [],
+        proposals: [{ id: 'pr-2', number: 'PROP-39810', title: 'Verve Growth Annual', total: 9600, discountPercent: 0, status: 'SENT', signerName: null, signedAt: null }],
+        invoices: [],
+      },
+      {
+        id: 'd-4',
+        title: 'Northstar Multi-Clinic CRM',
+        stageId: 'st-7',
+        ownerId: 'u-3',
+        value: 27500,
+        probability: 100,
+        createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
+        lastActivityAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+        closedAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+        lostReason: null,
+        aiScore: 95,
+        customer: {
+          companyName: 'Northstar Health',
+          contactName: 'Dr. Marcus Cole',
+          email: 'mcole@northstarhealth.io',
+          whatsappNumber: '',
+          segment: 'ENTERPRISE',
+          emailOptIn: true,
+          whatsappOptIn: false,
+          doNotContact: false,
+        },
+        activities: [{ id: 'a-5', type: 'PAYMENT_RECORDED', summary: 'Payment of $27,500 confirmed via Stripe. Deal marked Won.', at: new Date(Date.now() - 1 * 86400000).toISOString() }],
+        notes: [],
+        communications: [],
+        proposals: [{ id: 'pr-3', number: 'PROP-38102', title: 'Northstar Enterprise', total: 27500, discountPercent: 0, status: 'SIGNED', signerName: 'Dr. Marcus Cole', signedAt: new Date(Date.now() - 2 * 86400000).toISOString() }],
+        invoices: [{ id: 'inv-1', number: 'INV-90112', amount: 27500, status: 'PAID', provider: 'STRIPE', reference: 'pi_3Qx91A_demo' }],
+      },
+      {
+        id: 'd-5',
+        title: 'Apex Starter Funnel',
+        stageId: 'st-8',
+        ownerId: 'u-2',
+        value: 4800,
+        probability: 0,
+        createdAt: new Date(Date.now() - 28 * 86400000).toISOString(),
+        lastActivityAt: new Date(Date.now() - 8 * 86400000).toISOString(),
+        closedAt: new Date(Date.now() - 8 * 86400000).toISOString(),
+        lostReason: 'Budget frozen until Q1',
+        aiScore: 22,
+        customer: {
+          companyName: 'Apex Cloud Labs',
+          contactName: 'Liam O’Connor',
+          email: 'liam@apexcloud.dev',
+          whatsappNumber: '',
+          segment: 'STARTUP',
+          emailOptIn: false,
+          whatsappOptIn: false,
+          doNotContact: false,
+        },
+        activities: [{ id: 'a-6', type: 'STAGE_CHANGE', summary: 'Moved to Lost (Budget frozen until Q1)', at: new Date(Date.now() - 8 * 86400000).toISOString() }],
+        notes: [],
+        communications: [],
+        proposals: [],
+        invoices: [],
+      },
+      {
+        id: 'd-6',
+        title: 'MonieFlow Merchant Onboarding',
+        stageId: 'st-1',
+        ownerId: 'u-2',
+        value: 14500,
+        probability: 10,
+        createdAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+        lastActivityAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+        closedAt: null,
+        lostReason: null,
+        aiScore: null,
+        customer: {
+          companyName: 'MonieFlow Ltd',
+          contactName: 'Sadiq Umar',
+          email: 'sadiq@monieflow.ng',
+          whatsappNumber: '+2348054441122',
+          segment: 'MID_MARKET',
+          emailOptIn: true,
+          whatsappOptIn: true,
+          doNotContact: false,
+        },
+        activities: [{ id: 'a-7', type: 'STAGE_CHANGE', summary: 'Inbound qualified prospect created', at: new Date(Date.now() - 1 * 86400000).toISOString() }],
+        notes: [],
+        communications: [],
+        proposals: [],
+        invoices: [],
+      },
+    ];
+
+    const INITIAL_FOLLOWUPS = [
+      {
+        id: 'fu-1',
+        dealId: 'd-3',
+        dealTitle: 'Verve Omnichannel Conversion Suite',
+        companyName: 'Verve Retail Group',
+        channel: 'EMAIL',
+        subject: '48h Proposal Nudge — Verve Retail Group',
+        body: 'Hi Amaka, checking in to see if your procurement team has questions on PROP-39810.',
+        scheduledFor: new Date(Date.now() - 3600000).toISOString(),
+        status: 'PENDING',
+        automated: true,
+      },
+      {
+        id: 'fu-2',
+        dealId: 'd-5',
+        dealTitle: 'Apex Starter Funnel',
+        companyName: 'Apex Cloud Labs',
+        channel: 'EMAIL',
+        subject: 'Q1 Re-engagement check-in',
+        body: 'Hi Liam, checking back in on Apex Cloud Labs.',
+        scheduledFor: new Date(Date.now() - 1800000).toISOString(),
+        status: 'PENDING',
+        automated: true,
+      },
+    ];
+
+    function App() {
+      const [currentUserId, setCurrentUserId] = useState('u-1');
+      const [activeView, setActiveView] = useState('pipeline');
+      const [pipelineLayout, setPipelineLayout] = useState(() =>
+        typeof window !== 'undefined' && window.innerWidth < 768 ? 'stacked' : 'board'
+      );
+      const [mobileStageFilter, setMobileStageFilter] = useState('ALL');
+      const [stages, setStages] = useState(() => JSON.parse(localStorage.getItem('rf_stages') || 'null') || INITIAL_STAGES);
+      const [deals, setDeals] = useState(() => JSON.parse(localStorage.getItem('rf_deals') || 'null') || INITIAL_DEALS);
+      const [followUps, setFollowUps] = useState(() => JSON.parse(localStorage.getItem('rf_followups') || 'null') || INITIAL_FOLLOWUPS);
+      const [auditLogs, setAuditLogs] = useState(() => JSON.parse(localStorage.getItem('rf_audit') || 'null') || [
+        { id: 'aud-1', actor: 'Adaeze Okonkwo (ADMIN)', action: 'SYSTEM_READY', target: 'Pipeline & Seed Data', at: new Date().toISOString() },
+      ]);
+
+      const [selectedDealId, setSelectedDealId] = useState(null);
+      const [draggedDealId, setDraggedDealId] = useState(null);
+      const [dragOverStageId, setDragOverStageId] = useState(null);
+      const [lostModal, setLostModal] = useState(null);
+      const [lostReasonInput, setLostReasonInput] = useState('');
+      const [newDealModal, setNewDealModal] = useState(false);
+      const [newDealForm, setNewDealForm] = useState({ title: '', companyName: '', contactName: '', email: '', whatsappNumber: '', value: '12000', segment: 'MID_MARKET' });
+      const [segmentFilter, setSegmentFilter] = useState('ALL');
+      const [toast, setToast] = useState(null);
+
+      const currentUser = USERS.find((u) => u.id === currentUserId);
+
+      useEffect(() => { localStorage.setItem('rf_stages', JSON.stringify(stages)); }, [stages]);
+      useEffect(() => { localStorage.setItem('rf_deals', JSON.stringify(deals)); }, [deals]);
+      useEffect(() => { localStorage.setItem('rf_followups', JSON.stringify(followUps)); }, [followUps]);
+      useEffect(() => { localStorage.setItem('rf_audit', JSON.stringify(auditLogs)); }, [auditLogs]);
+
+      const notify = (msg, type = 'info') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 4000);
+      };
+
+      const logAudit = (action, target) => {
+        setAuditLogs((prev) => [
+          { id: 'aud-' + Date.now(), actor: `${currentUser.name} (${currentUser.role})`, action, target, at: new Date().toISOString() },
+          ...prev,
+        ]);
+      };
+
+      const resetDemo = () => {
+        localStorage.clear();
+        setStages(INITIAL_STAGES);
+        setDeals(INITIAL_DEALS);
+        setFollowUps(INITIAL_FOLLOWUPS);
+        setAuditLogs([{ id: 'aud-reset', actor: currentUser.name, action: 'DEMO_RESET', target: 'All Records', at: new Date().toISOString() }]);
+        setSelectedDealId(null);
+        notify('Demo data restored to initial state.');
+      };
+
+      const visibleDeals = useMemo(() => {
+        return deals.filter((d) => {
+          if (currentUser.role === 'SALES_REP' && d.ownerId !== currentUser.id) return false;
+          if (segmentFilter !== 'ALL' && d.customer.segment !== segmentFilter) return false;
+          return true;
+        });
+      }, [deals, currentUser, segmentFilter]);
+
+      const moveDealToStage = (dealId, targetStageId, lostReason = null) => {
+        const deal = deals.find((d) => d.id === dealId);
+        const fromStage = stages.find((s) => s.id === deal.stageId);
+        const toStage = stages.find((s) => s.id === targetStageId);
+        if (!deal || !toStage || fromStage.id === toStage.id) return;
+
+        if (toStage.isLost && !lostReason) {
+          setLostModal({ dealId, targetStageId });
+          return;
+        }
+
+        const now = new Date().toISOString();
+        setDeals((prev) =>
+          prev.map((d) =>
+            d.id === dealId
+              ? {
+                  ...d,
+                  stageId: toStage.id,
+                  probability: toStage.defaultProbability,
+                  lostReason: toStage.isLost ? lostReason : null,
+                  closedAt: toStage.isWon || toStage.isLost ? now : null,
+                  lastActivityAt: now,
+                  activities: [
+                    { id: 'act-' + Date.now(), type: 'STAGE_CHANGE', summary: `Moved from "${fromStage.name}" to "${toStage.name}"${lostReason ? ` (${lostReason})` : ''}`, at: now },
+                    ...d.activities,
+                  ],
+                }
+              : d
+          )
+        );
+
+        if (toStage.slug === 'proposal-sent') {
+          setFollowUps((prev) => [
+            {
+              id: 'fu-' + Date.now(),
+              dealId: deal.id,
+              dealTitle: deal.title,
+              companyName: deal.customer.companyName,
+              channel: 'EMAIL',
+              subject: `48h Automated Follow-Up: ${deal.customer.companyName}`,
+              body: `Hi ${deal.customer.contactName}, checking in on the proposal for ${deal.title}.`,
+              scheduledFor: now,
+              status: 'PENDING',
+              automated: true,
+            },
+            ...prev,
+          ]);
+          notify(`Moved to "${toStage.name}" & queued automated 48h follow-up!`);
+        } else {
+          notify(`Moved "${deal.title}" to ${toStage.name}`);
+        }
+
+        logAudit('DEAL_STAGE_CHANGED', `${deal.title}: ${fromStage.name} -> ${toStage.name}`);
+      };
+
+      const createProspect = (e) => {
+        e.preventDefault();
+        const firstStage = stages.filter((s) => s.isActive).sort((a, b) => a.order - b.order)[0];
+        const now = new Date().toISOString();
+        const newDeal = {
+          id: 'd-' + Date.now(),
+          title: newDealForm.title,
+          stageId: firstStage.id,
+          ownerId: currentUser.id,
+          value: Number(newDealForm.value),
+          probability: firstStage.defaultProbability,
+          createdAt: now,
+          lastActivityAt: now,
+          closedAt: null,
+          lostReason: null,
+          aiScore: null,
+          customer: {
+            companyName: newDealForm.companyName,
+            contactName: newDealForm.contactName,
+            email: newDealForm.email,
+            whatsappNumber: newDealForm.whatsappNumber,
+            segment: newDealForm.segment,
+            emailOptIn: true,
+            whatsappOptIn: Boolean(newDealForm.whatsappNumber),
+            doNotContact: false,
+          },
+          activities: [{ id: 'a-' + Date.now(), type: 'STAGE_CHANGE', summary: `Qualified prospect entered pipeline at "${firstStage.name}"`, at: now }],
+          notes: [],
+          communications: [],
+          proposals: [],
+          invoices: [],
+        };
+        setDeals((prev) => [newDeal, ...prev]);
+        logAudit('DEAL_CREATED', `${newDeal.title} ($${newDeal.value.toLocaleString()})`);
+        setNewDealModal(false);
+        setNewDealForm({ title: '', companyName: '', contactName: '', email: '', whatsappNumber: '', value: '12000', segment: 'MID_MARKET' });
+        notify(`Created prospect "${newDeal.title}"`);
+      };
+
+      const runFollowUpWorker = () => {
+        let sent = 0, skipped = 0;
+        const now = new Date().toISOString();
+        setFollowUps((prev) =>
+          prev.map((task) => {
+            if (task.status !== 'PENDING') return task;
+            const deal = deals.find((d) => d.id === task.dealId);
+            if (!deal) return task;
+            const c = deal.customer;
+            if (c.doNotContact || (task.channel === 'EMAIL' && !c.emailOptIn) || (task.channel === 'WHATSAPP' && !c.whatsappOptIn)) {
+              skipped++;
+              return { ...task, status: 'SKIPPED_NO_CONSENT' };
+            }
+            sent++;
+            setDeals((ds) =>
+              ds.map((d) =>
+                d.id === deal.id
+                  ? {
+                      ...d,
+                      communications: [{ id: 'c-' + Date.now() + Math.random(), channel: task.channel, subject: task.subject, body: task.body, status: 'AUTOMATED_SENT', at: now }, ...d.communications],
+                      activities: [{ id: 'a-' + Date.now() + Math.random(), type: `${task.channel}_SENT`, summary: `Automated Follow-Up: ${task.subject || task.body.slice(0, 60)}`, at: now }, ...d.activities],
+                    }
+                  : d
+              )
+            );
+            return { ...task, status: 'SENT' };
+          })
+        );
+        logAudit('AUTOMATION_WORKER_RUN', `Dispatched: ${sent}, Skipped (Consent): ${skipped}`);
+        notify(`Automation Worker finished: ${sent} sent, ${skipped} blocked by consent preferences.`);
+      };
+
+      const exportCsv = () => {
+        const headers = ['Deal ID', 'Title', 'Company', 'Segment', 'Stage', 'Value ($)', 'Owner'];
+        const rows = deals.map((d) => {
+          const st = stages.find((s) => s.id === d.stageId)?.name || '';
+          const ow = USERS.find((u) => u.id === d.ownerId)?.name || '';
+          return [d.id, d.title, d.customer.companyName, d.customer.segment, st, d.value, ow]
+            .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+            .join(',');
+        });
+        const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `revflow-sales-report-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        logAudit('REPORT_EXPORTED', 'deals-csv');
+        notify('CSV Sales Report downloaded!');
+      };
+
+      const selectedDeal = deals.find((d) => d.id === selectedDealId);
+      const activeStages = stages.filter((s) => s.isActive).sort((a, b) => a.order - b.order);
+      const filteredStackedStages = mobileStageFilter === 'ALL' ? activeStages : activeStages.filter((s) => s.id === mobileStageFilter);
+
+      return (
+        <div className="min-h-screen flex flex-col overflow-x-hidden">
+          {/* Responsive Top Header */}
+          <header className="sticky top-0 z-30 border-b border-slate-200 bg-white shadow-sm">
+            <div className="mx-auto max-w-[1520px] px-4 sm:px-6 py-3 space-y-2.5 lg:space-y-0 lg:flex lg:items-center lg:justify-between lg:gap-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 font-bold text-white">R</div>
+                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                    <span className="text-base font-extrabold tracking-tight text-slate-900 truncate">RevFlow CRM</span>
+                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">PREVIEW</span>
+                  </div>
+                </div>
+                <button onClick={resetDemo} className="lg:hidden shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                  Reset
+                </button>
+              </div>
+
+              <nav className="no-scrollbar flex items-center gap-1 overflow-x-auto whitespace-nowrap pb-0.5 lg:pb-0 text-xs sm:text-sm font-medium">
+                {[
+                  { id: 'pipeline', label: 'Sales Pipeline' },
+                  { id: 'automation', label: `Follow-Ups (${followUps.filter((f) => f.status === 'PENDING').length})` },
+                  { id: 'analytics', label: 'Analytics' },
+                  ...(currentUser.role !== 'SALES_REP' ? [{ id: 'admin', label: 'Admin & Audit' }] : []),
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveView(tab.id)}
+                    className={`shrink-0 rounded-lg px-3 py-2 transition ${activeView === tab.id ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+
+              <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
+                <label className="hidden sm:inline text-slate-500 font-medium">Persona:</label>
+                <select
+                  value={currentUserId}
+                  onChange={(e) => {
+                    const nextUser = USERS.find((u) => u.id === e.target.value);
+                    setCurrentUserId(e.target.value);
+                    if (nextUser?.role === 'SALES_REP' && activeView === 'admin') setActiveView('pipeline');
+                  }}
+                  className="w-full sm:w-auto rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 sm:py-1.5 text-base sm:text-xs font-semibold text-slate-800"
+                >
+                  {USERS.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+                <button onClick={resetDemo} className="hidden lg:inline-block rounded-lg border border-slate-200 px-2.5 py-1.5 text-slate-500 hover:bg-slate-100">
+                  Reset Demo
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {toast && (
+            <div className={`fixed bottom-4 left-4 right-4 sm:left-auto sm:right-5 sm:max-w-md z-50 rounded-xl px-4 py-3 text-xs sm:text-sm font-semibold text-white shadow-xl ${toast.type === 'error' ? 'bg-red-600' : 'bg-slate-900'}`}>
+              {toast.msg}
+            </div>
+          )}
+
+          {/* Main Content */}
+          <main className="mx-auto w-full max-w-[1520px] flex-1 p-3.5 sm:p-5">
+            {activeView === 'pipeline' && (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h1 className="text-lg sm:text-xl font-bold text-slate-900">Visual Sales Conversion Pipeline</h1>
+                    <p className="text-xs text-slate-500">Drag cards on desktop or use the quick stage selector & drawer on touch devices.</p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+                    <div className="inline-flex rounded-xl border border-slate-300 bg-white p-0.5 text-xs font-semibold">
+                      <button
+                        onClick={() => setPipelineLayout('board')}
+                        className={`flex-1 rounded-lg px-2.5 py-2 sm:py-1.5 ${pipelineLayout === 'board' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
+                      >
+                        Board
+                      </button>
+                      <button
+                        onClick={() => setPipelineLayout('stacked')}
+                        className={`flex-1 rounded-lg px-2.5 py-2 sm:py-1.5 ${pipelineLayout === 'stacked' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
+                      >
+                        Stage List
+                      </button>
+                    </div>
+
+                    <select value={segmentFilter} onChange={(e) => setSegmentFilter(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-base sm:text-xs font-medium">
+                      <option value="ALL">All Segments</option>
+                      <option value="ENTERPRISE">Enterprise</option>
+                      <option value="MID_MARKET">Mid-Market</option>
+                      <option value="SMB">SMB</option>
+                      <option value="STARTUP">Startup</option>
+                    </select>
+
+                    <button onClick={() => setNewDealModal(true)} className="col-span-2 sm:col-span-1 rounded-xl bg-indigo-600 px-4 py-2.5 sm:py-2 text-xs font-semibold text-white shadow hover:bg-indigo-700">
+                      + New Qualified Prospect
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stage Quick-Filter Pills for Stage List View */}
+                {pipelineLayout === 'stacked' && (
+                  <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1 text-xs">
+                    <button
+                      onClick={() => setMobileStageFilter('ALL')}
+                      className={`shrink-0 rounded-full px-3 py-1.5 font-semibold border ${mobileStageFilter === 'ALL' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+                    >
+                      All Stages ({visibleDeals.length})
+                    </button>
+                    {activeStages.map((s) => {
+                      const cnt = visibleDeals.filter((d) => d.stageId === s.id).length;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => setMobileStageFilter(s.id)}
+                          className={`shrink-0 rounded-full px-3 py-1.5 font-semibold border ${mobileStageFilter === s.id ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
+                        >
+                          {s.name} ({cnt})
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Kanban Horizontal Snap Board vs Stacked Stage List */}
+                {pipelineLayout === 'board' ? (
+                  <div className="flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-4">
+                    {activeStages.map((stage) => {
+                      const stageDeals = visibleDeals.filter((d) => d.stageId === stage.id);
+                      const totalVal = stageDeals.reduce((sum, d) => sum + Number(d.value), 0);
+                      return (
+                        <div
+                          key={stage.id}
+                          onDragOver={(e) => { e.preventDefault(); setDragOverStageId(stage.id); }}
+                          onDragLeave={() => setDragOverStageId(null)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setDragOverStageId(null);
+                            if (draggedDealId) moveDealToStage(draggedDealId, stage.id);
+                            setDraggedDealId(null);
+                          }}
+                          className={`flex min-h-[440px] sm:min-h-[540px] w-[84vw] sm:w-72 shrink-0 snap-start flex-col rounded-2xl border p-3 transition ${
+                            dragOverStageId === stage.id ? 'border-indigo-500 bg-indigo-50/70' : 'border-slate-200 bg-slate-50'
+                          }`}
+                        >
+                          <div className="mb-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stage.colorHex }}></span>
+                              <h3 className="text-xs font-bold text-slate-800">{stage.name}</h3>
+                              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{stageDeals.length}</span>
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-500">${totalVal.toLocaleString()}</span>
+                          </div>
+
+                          <div className="flex flex-1 flex-col gap-2.5">
+                            {stageDeals.length === 0 && (
+                              <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 p-4 text-center text-[11px] text-slate-400">
+                                Drop deals here
+                              </div>
+                            )}
+                            {stageDeals.map((deal) => (
+                              <DealCard
+                                key={deal.id}
+                                deal={deal}
+                                stages={activeStages}
+                                onDragStart={() => setDraggedDealId(deal.id)}
+                                onOpen={() => setSelectedDealId(deal.id)}
+                                onMoveStage={moveDealToStage}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    {filteredStackedStages.map((stage) => {
+                      const stageDeals = visibleDeals.filter((d) => d.stageId === stage.id);
+                      const totalVal = stageDeals.reduce((sum, d) => sum + Number(d.value), 0);
+                      return (
+                        <div key={stage.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stage.colorHex }}></span>
+                              <h3 className="text-xs font-bold text-slate-800">{stage.name} ({stageDeals.length})</h3>
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-500">${totalVal.toLocaleString()}</span>
+                          </div>
+                          {stageDeals.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 py-2">No deals in this stage.</p>
+                          ) : (
+                            stageDeals.map((deal) => (
+                              <DealCard
+                                key={deal.id}
+                                deal={deal}
+                                stages={activeStages}
+                                onDragStart={() => setDraggedDealId(deal.id)}
+                                onOpen={() => setSelectedDealId(deal.id)}
+                                onMoveStage={moveDealToStage}
+                              />
+                            ))
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeView === 'automation' && (
+              <FollowUpView followUps={followUps} onRunWorker={runFollowUpWorker} />
+            )}
+
+            {activeView === 'analytics' && (
+              <AnalyticsView deals={deals} stages={stages} users={USERS} onExport={exportCsv} />
+            )}
+
+            {activeView === 'admin' && (
+              <AdminView stages={stages} setStages={setStages} users={USERS} auditLogs={auditLogs} logAudit={logAudit} notify={notify} />
+            )}
+          </main>
+
+          {/* Deal 360 Drawer */}
+          {selectedDeal && (
+            <DealDrawer
+              deal={selectedDeal}
+              stages={stages}
+              currentUser={currentUser}
+              onClose={() => setSelectedDealId(null)}
+              onMoveStage={moveDealToStage}
+              onUpdateDeal={(updater) => setDeals((prev) => prev.map((d) => (d.id === selectedDeal.id ? updater(d) : d)))}
+              onAddFollowUp={(task) => setFollowUps((prev) => [task, ...prev])}
+              logAudit={logAudit}
+              notify={notify}
+            />
+          )}
+
+          {/* Lost Reason Modal */}
+          {lostModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+              <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-xl">
+                <h3 className="text-lg font-bold">Mark Deal as Lost</h3>
+                <p className="mt-1 text-xs text-slate-500">Provide a lost reason for Win/Loss analytics.</p>
+                <input
+                  value={lostReasonInput}
+                  onChange={(e) => setLostReasonInput(e.target.value)}
+                  placeholder="e.g. Budget frozen, Competitor selected, No response"
+                  className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-base sm:text-sm"
+                />
+                <div className="mt-4 flex justify-end gap-2">
+                  <button onClick={() => setLostModal(null)} className="px-3 py-2 text-xs font-medium text-slate-600">Cancel</button>
+                  <button
+                    disabled={!lostReasonInput.trim()}
+                    onClick={() => {
+                      moveDealToStage(lostModal.dealId, lostModal.targetStageId, lostReasonInput.trim());
+                      setLostModal(null);
+                      setLostReasonInput('');
+                    }}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Confirm Lost
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* New Prospect Modal */}
+          {newDealModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+              <form onSubmit={createProspect} className="max-h-[90vh] w-full max-w-lg space-y-3 overflow-y-auto rounded-2xl bg-white p-5 sm:p-6 shadow-xl">
+                <h3 className="text-lg font-bold">Add Qualified Prospect</h3>
+                <input required placeholder="Deal Title (e.g. Zenith Bank Funnel License)" value={newDealForm.title} onChange={(e) => setNewDealForm({ ...newDealForm, title: e.target.value })} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-base sm:text-sm" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input required placeholder="Company Name" value={newDealForm.companyName} onChange={(e) => setNewDealForm({ ...newDealForm, companyName: e.target.value })} className="rounded-xl border border-slate-300 px-3 py-2.5 text-base sm:text-sm" />
+                  <input required type="number" placeholder="Deal Value ($)" value={newDealForm.value} onChange={(e) => setNewDealForm({ ...newDealForm, value: e.target.value })} className="rounded-xl border border-slate-300 px-3 py-2.5 text-base sm:text-sm" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input required placeholder="Contact Name" value={newDealForm.contactName} onChange={(e) => setNewDealForm({ ...newDealForm, contactName: e.target.value })} className="rounded-xl border border-slate-300 px-3 py-2.5 text-base sm:text-sm" />
+                  <input required type="email" placeholder="Contact Email" value={newDealForm.email} onChange={(e) => setNewDealForm({ ...newDealForm, email: e.target.value })} className="rounded-xl border border-slate-300 px-3 py-2.5 text-base sm:text-sm" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input placeholder="WhatsApp Number (optional)" value={newDealForm.whatsappNumber} onChange={(e) => setNewDealForm({ ...newDealForm, whatsappNumber: e.target.value })} className="rounded-xl border border-slate-300 px-3 py-2.5 text-base sm:text-sm" />
+                  <select value={newDealForm.segment} onChange={(e) => setNewDealForm({ ...newDealForm, segment: e.target.value })} className="rounded-xl border border-slate-300 px-3 py-2.5 text-base sm:text-sm">
+                    <option value="ENTERPRISE">Enterprise</option>
+                    <option value="MID_MARKET">Mid-Market</option>
+                    <option value="SMB">SMB</option>
+                    <option value="STARTUP">Startup</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button type="button" onClick={() => setNewDealModal(false)} className="px-4 py-2.5 text-xs font-medium text-slate-600">Cancel</button>
+                  <button type="submit" className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white">Create Prospect</button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function DealCard({ deal, stages, onDragStart, onOpen, onMoveStage }) {
+      const owner = USERS.find((u) => u.id === deal.ownerId);
+      return (
+        <div
+          draggable
+          onDragStart={onDragStart}
+          onClick={onOpen}
+          className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:border-indigo-400 hover:shadow-md"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{deal.customer.segment}</span>
+            {deal.aiScore !== null && (
+              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">✦ AI {deal.aiScore}</span>
+            )}
+          </div>
+          <h4 className="mt-2 text-sm font-bold text-slate-900">{deal.title}</h4>
+          <p className="text-xs text-slate-500">{deal.customer.companyName} • {deal.customer.contactName}</p>
+          {deal.lostReason && <p className="mt-1 text-[11px] text-red-600">Reason: {deal.lostReason}</p>}
+
+          {/* Touch-friendly Stage Switcher on Phones & Tablets */}
+          <div className="mt-2.5 md:hidden" onClick={(e) => e.stopPropagation()}>
+            <select
+              value={deal.stageId}
+              onChange={(e) => onMoveStage(deal.id, e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-base sm:text-xs font-medium text-slate-700"
+            >
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>Move: {s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs">
+            <span className="font-bold text-emerald-700">${Number(deal.value).toLocaleString()}</span>
+            <span className="text-slate-400">{owner?.name.split(' ')[0]} • {deal.probability}%</span>
+          </div>
+        </div>
+      );
+    }
+
+    function DealDrawer({ deal, stages, currentUser, onClose, onMoveStage, onUpdateDeal, onAddFollowUp, logAudit, notify }) {
+      const [tab, setTab] = useState('crm');
+      const [noteInput, setNoteInput] = useState('');
+      const [comm, setComm] = useState({ channel: 'EMAIL', subject: '', body: '' });
+      const [sched, setSched] = useState({ channel: 'EMAIL', subject: 'Follow-up check-in', body: `Hi ${deal.customer.contactName}, following up on ${deal.title}.` });
+      const [selectedProdId, setSelectedProdId] = useState(PRODUCTS[0].id);
+      const [qty, setQty] = useState(1);
+      const [discount, setDiscount] = useState(0);
+      const [aiReport, setAiReport] = useState(null);
+
+      const stage = stages.find((s) => s.id === deal.stageId);
+      const prod = PRODUCTS.find((p) => p.id === selectedProdId);
+
+      const applyTemplate = (tplId) => {
+        const tpl = TEMPLATES.find((t) => t.id === tplId);
+        if (!tpl) return;
+        const interp = (txt) => txt
+          .replace(/\{\{contactName\}\}/g, deal.customer.contactName)
+          .replace(/\{\{companyName\}\}/g, deal.customer.companyName)
+          .replace(/\{\{dealValue\}\}/g, `$${Number(deal.value).toLocaleString()}`)
+          .replace(/\{\{repName\}\}/g, currentUser.name);
+        setComm({ channel: tpl.channel, subject: interp(tpl.subject), body: interp(tpl.body) });
+      };
+
+      const addNote = (e) => {
+        e.preventDefault();
+        if (!noteInput.trim()) return;
+        const now = new Date().toISOString();
+        onUpdateDeal((d) => ({
+          ...d,
+          lastActivityAt: now,
+          notes: [{ id: 'n-' + Date.now(), author: currentUser.name, content: noteInput, at: now }, ...d.notes],
+          activities: [{ id: 'a-' + Date.now(), type: 'NOTE', summary: `Internal note: ${noteInput}`, at: now }, ...d.activities],
+        }));
+        setNoteInput('');
+        notify('Internal note saved.');
+      };
+
+      const sendComm = (e) => {
+        e.preventDefault();
+        const c = deal.customer;
+        if (c.doNotContact) return notify('Blocked: Customer enabled Do Not Contact.', 'error');
+        if (comm.channel === 'EMAIL' && !c.emailOptIn) return notify('Blocked: Customer opted out of Email.', 'error');
+        if (comm.channel === 'WHATSAPP' && !c.whatsappOptIn) return notify('Blocked: Customer has not opted into WhatsApp.', 'error');
+        if (comm.channel === 'WHATSAPP' && !c.whatsappNumber) return notify('Blocked: No WhatsApp number on file.', 'error');
+
+        const now = new Date().toISOString();
+        onUpdateDeal((d) => ({
+          ...d,
+          lastActivityAt: now,
+          communications: [{ id: 'c-' + Date.now(), channel: comm.channel, subject: comm.subject, body: comm.body, status: 'DELIVERED', at: now }, ...d.communications],
+          activities: [{ id: 'a-' + Date.now(), type: `${comm.channel}_SENT`, summary: `${comm.channel}: ${comm.subject || comm.body.slice(0, 70)}`, at: now }, ...d.activities],
+        }));
+        logAudit('COMMUNICATION_SENT', `${comm.channel} -> ${c.companyName}`);
+        setComm({ ...comm, subject: '', body: '' });
+        notify(`${comm.channel} message dispatched & logged.`);
+      };
+
+      const toggleConsent = (key) => {
+        onUpdateDeal((d) => ({
+          ...d,
+          customer: { ...d.customer, [key]: !d.customer[key] },
+        }));
+        logAudit('CONSENT_UPDATED', `${deal.customer.companyName} (${key})`);
+      };
+
+      const generateProposal = (e) => {
+        e.preventDefault();
+        if (Number(discount) > currentUser.maxDiscount) {
+          return notify(`Discount ${discount}% exceeds ${currentUser.role} limit (${currentUser.maxDiscount}%). Switch to ADMIN to approve.`, 'error');
+        }
+        const subtotal = prod.unitPrice * Number(qty);
+        const total = Math.round(subtotal * (1 - Number(discount) / 100));
+        const propNum = 'PROP-' + Math.floor(10000 + Math.random() * 89999);
+        const propStage = stages.find((s) => s.slug === 'proposal-sent');
+        const now = new Date().toISOString();
+
+        onUpdateDeal((d) => ({
+          ...d,
+          value: total,
+          stageId: propStage ? propStage.id : d.stageId,
+          probability: propStage ? propStage.defaultProbability : d.probability,
+          lastActivityAt: now,
+          proposals: [{ id: 'pr-' + Date.now(), number: propNum, title: `${prod.name} (x${qty})`, total, discountPercent: Number(discount), status: 'SENT', signerName: null, signedAt: null }, ...d.proposals],
+          activities: [{ id: 'a-' + Date.now(), type: 'PROPOSAL_CREATED', summary: `Generated & sent ${propNum} ($${total.toLocaleString()}, ${discount}% discount)`, at: now }, ...d.activities],
+        }));
+        logAudit('PROPOSAL_CREATED', `${propNum} for ${deal.customer.companyName}`);
+        notify(`Proposal ${propNum} generated & sent!`);
+      };
+
+      const signProposal = (propId) => {
+        const prop = deal.proposals.find((p) => p.id === propId);
+        const invNum = 'INV-' + Math.floor(10000 + Math.random() * 89999);
+        const now = new Date().toISOString();
+        onUpdateDeal((d) => ({
+          ...d,
+          lastActivityAt: now,
+          proposals: d.proposals.map((p) => (p.id === propId ? { ...p, status: 'SIGNED', signerName: d.customer.contactName, signedAt: now } : p)),
+          invoices: [{ id: 'inv-' + Date.now(), number: invNum, amount: prop.total, status: 'PENDING', provider: 'STRIPE', reference: null }, ...d.invoices],
+          activities: [{ id: 'a-' + Date.now(), type: 'PROPOSAL_SIGNED', summary: `E-Signed by ${d.customer.contactName}; Invoice ${invNum} generated`, at: now }, ...d.activities],
+        }));
+        logAudit('PROPOSAL_SIGNED', `${prop.number} -> ${invNum}`);
+        notify(`Agreement e-signed! Invoice ${invNum} ready for payment.`);
+      };
+
+      const recordPayment = (invId, provider) => {
+        const inv = deal.invoices.find((i) => i.id === invId);
+        const wonStage = stages.find((s) => s.isWon);
+        const now = new Date().toISOString();
+        const ref = `${provider.toLowerCase()}_${Math.floor(100000 + Math.random() * 899999)}`;
+        onUpdateDeal((d) => ({
+          ...d,
+          stageId: wonStage ? wonStage.id : d.stageId,
+          probability: 100,
+          closedAt: now,
+          lastActivityAt: now,
+          invoices: d.invoices.map((i) => (i.id === invId ? { ...i, status: 'PAID', provider, reference: ref } : i)),
+          activities: [
+            { id: 'a-' + Date.now(), type: 'PAYMENT_RECORDED', summary: `Payment of $${inv.amount.toLocaleString()} confirmed (${provider} / ${ref}). Purchase receipt emailed & Deal marked Won!`, at: now },
+            ...d.activities,
+          ],
+        }));
+        logAudit('PAYMENT_CONFIRMED_WON', `${deal.title} ($${inv.amount.toLocaleString()})`);
+        notify(`Payment confirmed! "${deal.title}" is now WON.`);
+      };
+
+      const runAi = () => {
+        const daysIdle = Math.max(0, Math.floor((Date.now() - new Date(deal.lastActivityAt).getTime()) / 86400000));
+        const valBoost = deal.value >= 20000 ? 22 : 12;
+        const score = Math.min(97, Math.max(18, Math.round(deal.probability * 0.6 + valBoost + deal.communications.length * 5 - daysIdle * 2)));
+        const estProb = Math.min(95, Math.max(8, Math.round(deal.probability + deal.communications.length * 3 - daysIdle * 2)));
+        const report = {
+          score,
+          tier: score >= 80 ? 'CRITICAL' : score >= 60 ? 'HIGH' : 'MEDIUM',
+          estProb,
+          summary: `${deal.customer.companyName} (${deal.customer.segment}) is in "${stage.name}" worth $${Number(deal.value).toLocaleString()} with ${deal.communications.length} logged touchpoint(s) and ${daysIdle} idle day(s).`,
+          objections: deal.notes.some((n) => n.content.toLowerCase().includes('discount'))
+            ? ['Pricing / multi-year discount expectation noted by rep']
+            : ['Confirm final procurement sign-off & onboarding timeline'],
+          actions: stage.slug === 'proposal-sent' || stage.slug === 'negotiation'
+            ? ['Confirm e-signature date with decision maker', 'Share Stripe/Paystack payment link immediately after signature']
+            : ['Schedule tailored product demo & generate custom quotation'],
+        };
+        setAiReport(report);
+        onUpdateDeal((d) => ({ ...d, aiScore: score }));
+      };
+
+      return (
+        <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/40">
+          <div className="flex h-full w-full sm:max-w-2xl flex-col bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 sm:px-6 py-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={deal.stageId}
+                    onChange={(e) => onMoveStage(deal.id, e.target.value)}
+                    className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700"
+                  >
+                    {stages.filter((s) => s.isActive).map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-slate-500">Probability: {deal.probability}%</span>
+                </div>
+                <h2 className="mt-1.5 text-base sm:text-lg font-bold text-slate-900 break-words">{deal.title}</h2>
+                <p className="text-xs text-slate-500 break-words">
+                  {deal.customer.companyName} • {deal.customer.contactName} ({deal.customer.email}) • <strong className="text-slate-900">${Number(deal.value).toLocaleString()}</strong>
+                </p>
+              </div>
+              <button onClick={onClose} className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-500 hover:bg-slate-100">✕</button>
+            </div>
+
+            <div className="no-scrollbar flex overflow-x-auto whitespace-nowrap border-b border-slate-200 px-4 sm:px-6 text-xs font-semibold">
+              {[
+                { id: 'crm', label: 'CRM & Timeline' },
+                { id: 'engage', label: 'Engage & Consent' },
+                { id: 'convert', label: 'Proposals & Pay' },
+                { id: 'ai', label: '✦ AI Intelligence' },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`shrink-0 border-b-2 px-3.5 py-3 ${tab === t.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+              {tab === 'crm' && (
+                <>
+                  <form onSubmit={addNote} className="space-y-2">
+                    <textarea rows={2} value={noteInput} onChange={(e) => setNoteInput(e.target.value)} placeholder="Add internal team note or call summary..." className="w-full rounded-xl border border-slate-300 p-3 text-base sm:text-xs" />
+                    <button type="submit" className="w-full sm:w-auto rounded-lg bg-slate-900 px-4 py-2.5 sm:py-1.5 text-xs font-semibold text-white">Save Internal Note</button>
+                  </form>
+                  <div className="space-y-2.5">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Activity Timeline</h4>
+                    {deal.activities.map((a) => (
+                      <div key={a.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs">
+                        <div className="flex flex-wrap justify-between gap-1 text-[10px] text-slate-400">
+                          <span className="font-bold text-indigo-600">{a.type}</span>
+                          <span>{new Date(a.at).toLocaleString()}</span>
+                        </div>
+                        <p className="mt-1 text-slate-800">{a.summary}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {tab === 'engage' && (
+                <>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Communication Consent & Preferences</h4>
+                    <div className="mt-2.5 flex flex-col sm:flex-row sm:flex-wrap gap-3 text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={deal.customer.emailOptIn} onChange={() => toggleConsent('emailOptIn')} /> Email Opt-In</label>
+                      <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={deal.customer.whatsappOptIn} onChange={() => toggleConsent('whatsappOptIn')} /> WhatsApp Opt-In</label>
+                      <label className="flex items-center gap-2 cursor-pointer text-red-700 font-semibold"><input type="checkbox" checked={deal.customer.doNotContact} onChange={() => toggleConsent('doNotContact')} /> Do Not Contact</label>
+                    </div>
+                  </div>
+
+                  <form onSubmit={sendComm} className="space-y-3 rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-800">Send / Log Communication</span>
+                      <select onChange={(e) => applyTemplate(e.target.value)} defaultValue="" className="rounded-lg border border-slate-200 px-2 py-2 sm:py-1.5 text-base sm:text-[11px]">
+                        <option value="" disabled>Insert Template...</option>
+                        {TEMPLATES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    </div>
+                    <select value={comm.channel} onChange={(e) => setComm({ ...comm, channel: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-xs">
+                      <option value="EMAIL">Email ({deal.customer.email})</option>
+                      <option value="WHATSAPP">WhatsApp ({deal.customer.whatsappNumber || 'Not set'})</option>
+                      <option value="PHONE">Log Phone Call</option>
+                      <option value="MEETING">Log Meeting</option>
+                    </select>
+                    {comm.channel === 'EMAIL' && (
+                      <input placeholder="Email Subject" value={comm.subject} onChange={(e) => setComm({ ...comm, subject: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-xs" />
+                    )}
+                    <textarea required rows={3} placeholder="Message body or call notes..." value={comm.body} onChange={(e) => setComm({ ...comm, body: e.target.value })} className="w-full rounded-lg border border-slate-300 p-3 text-base sm:text-xs" />
+                    <button type="submit" className="w-full sm:w-auto rounded-lg bg-indigo-600 px-4 py-2.5 sm:py-2 text-xs font-semibold text-white">Dispatch & Log</button>
+                  </form>
+
+                  <div className="rounded-xl border border-slate-200 p-4 space-y-2">
+                    <h4 className="text-xs font-bold text-slate-800">Schedule Automated Follow-Up Reminder</h4>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input value={sched.subject} onChange={(e) => setSched({ ...sched, subject: e.target.value })} className="flex-1 rounded-lg border border-slate-300 px-2.5 py-2 sm:py-1.5 text-base sm:text-xs" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onAddFollowUp({
+                            id: 'fu-' + Date.now(),
+                            dealId: deal.id,
+                            dealTitle: deal.title,
+                            companyName: deal.customer.companyName,
+                            channel: sched.channel,
+                            subject: sched.subject,
+                            body: sched.body,
+                            scheduledFor: new Date().toISOString(),
+                            status: 'PENDING',
+                            automated: false,
+                          });
+                          notify('Follow-up reminder queued! Check the Follow-Ups tab.');
+                        }}
+                        className="rounded-lg bg-slate-900 px-4 py-2.5 sm:py-1.5 text-xs font-semibold text-white"
+                      >
+                        Queue Task
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {tab === 'convert' && (
+                <>
+                  <form onSubmit={generateProposal} className="space-y-3 rounded-xl border border-slate-200 p-4">
+                    <h4 className="text-xs font-bold text-slate-900">Product Catalog & Custom Proposal Builder</h4>
+                    <select value={selectedProdId} onChange={(e) => setSelectedProdId(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-xs">
+                      {PRODUCTS.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} — ${p.unitPrice.toLocaleString()} ({p.billing})</option>
+                      ))}
+                    </select>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <label>Qty <input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-2 sm:py-1.5 text-base sm:text-xs" /></label>
+                      <label>Discount % (Max {currentUser.maxDiscount}%) <input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-2 sm:py-1.5 text-base sm:text-xs" /></label>
+                      <div className="flex sm:flex-col justify-between sm:justify-end items-center sm:items-start rounded-lg bg-slate-50 p-2.5 sm:bg-transparent sm:p-0">
+                        <span className="text-[11px] text-slate-500">Quoted Total:</span>
+                        <strong className="text-sm text-emerald-700">${Math.round(prod.unitPrice * qty * (1 - discount / 100)).toLocaleString()}</strong>
+                      </div>
+                    </div>
+                    <button type="submit" className="w-full sm:w-auto rounded-lg bg-indigo-600 px-4 py-2.5 sm:py-2 text-xs font-semibold text-white">Generate & Send Proposal</button>
+                  </form>
+
+                  <div className="space-y-2">
+                    <h4 className="text-[11px] font-bold uppercase text-slate-400">Proposals & Electronic Agreements</h4>
+                    {deal.proposals.length === 0 && <p className="text-xs text-slate-400">No proposals generated yet.</p>}
+                    {deal.proposals.map((p) => (
+                      <div key={p.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-slate-200 p-3 text-xs">
+                        <div>
+                          <p className="font-bold text-slate-900">{p.number} — ${p.total.toLocaleString()}</p>
+                          <p className="text-slate-500">Status: {p.status} {p.discountPercent > 0 ? `(${p.discountPercent}% discount)` : ''}</p>
+                        </div>
+                        {p.status !== 'SIGNED' ? (
+                          <button onClick={() => signProposal(p.id)} className="w-full sm:w-auto rounded-lg bg-emerald-600 px-3 py-2.5 sm:py-1.5 font-semibold text-white">Capture E-Signature</button>
+                        ) : (
+                          <span className="font-bold text-emerald-700">✓ E-Signed ({p.signerName})</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-[11px] font-bold uppercase text-slate-400">Invoices & Payment Gateway</h4>
+                    {deal.invoices.length === 0 && <p className="text-xs text-slate-400">Sign a proposal above to generate an invoice.</p>}
+                    {deal.invoices.map((inv) => (
+                      <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border border-slate-200 p-3 text-xs">
+                        <div>
+                          <p className="font-bold text-slate-900">{inv.number} — ${inv.amount.toLocaleString()}</p>
+                          <p className="text-slate-500">Status: {inv.status} {inv.reference ? `(${inv.reference})` : ''}</p>
+                        </div>
+                        {inv.status !== 'PAID' ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => recordPayment(inv.id, 'STRIPE')} className="flex-1 sm:flex-none rounded-lg bg-slate-900 px-3 py-2.5 sm:py-1.5 font-semibold text-white">Pay via Stripe</button>
+                            <button onClick={() => recordPayment(inv.id, 'PAYSTACK')} className="flex-1 sm:flex-none rounded-lg bg-sky-600 px-3 py-2.5 sm:py-1.5 font-semibold text-white">Paystack</button>
+                          </div>
+                        ) : (
+                          <span className="self-start sm:self-auto rounded-full bg-emerald-100 px-2.5 py-1 font-bold text-emerald-800">PAID ({inv.provider})</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {tab === 'ai' && (
+                <div className="space-y-4">
+                  <button onClick={runAi} className="w-full sm:w-auto rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white">✦ Analyze Deal Signals</button>
+                  {aiReport && (
+                    <div className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 text-xs">
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-800">
+                        <strong>Advisory Estimate:</strong> AI predictions are probabilistic estimates based on pipeline activity and are not guaranteed outcomes.
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="rounded-xl bg-white p-3 shadow-sm">
+                          <span className="text-slate-500">Lead Priority Score</span>
+                          <p className="text-xl font-extrabold text-indigo-700">{aiReport.score}/100 ({aiReport.tier})</p>
+                        </div>
+                        <div className="rounded-xl bg-white p-3 shadow-sm">
+                          <span className="text-slate-500">Est. Closure Probability</span>
+                          <p className="text-xl font-extrabold text-emerald-700">{aiReport.estProb}% <span className="text-[11px] font-normal text-slate-400">(±14%)</span></p>
+                        </div>
+                      </div>
+                      <div>
+                        <strong className="text-slate-600 uppercase text-[10px]">Conversation Summary</strong>
+                        <p className="mt-0.5 text-slate-800">{aiReport.summary}</p>
+                      </div>
+                      <div>
+                        <strong className="text-slate-600 uppercase text-[10px]">Objection Analysis</strong>
+                        <ul className="mt-0.5 list-disc pl-4 text-slate-700">{aiReport.objections.map((o, i) => <li key={i}>{o}</li>)}</ul>
+                      </div>
+                      <div>
+                        <strong className="text-slate-600 uppercase text-[10px]">Suggested Next Actions</strong>
+                        <ul className="mt-0.5 list-disc pl-4 text-slate-700">{aiReport.actions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function FollowUpView({ followUps, onRunWorker }) {
+      const badgeClass = (status) =>
+        status === 'SENT' ? 'bg-emerald-100 text-emerald-700' :
+        status === 'SKIPPED_NO_CONSENT' ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-700';
+
+      return (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg sm:text-xl font-bold">Automated Follow-Up Queue & Consent Guard</h1>
+              <p className="text-xs text-slate-500">Simulated cron worker automatically skips opted-out or Do-Not-Contact prospects.</p>
+            </div>
+            <button onClick={onRunWorker} className="w-full sm:w-auto rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow hover:bg-indigo-700">
+              ▶ Run Follow-Up Worker Now
+            </button>
+          </div>
+
+          <div className="space-y-3 sm:hidden">
+            {followUps.map((f) => (
+              <div key={f.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2 text-xs shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900 truncate">{f.companyName}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{f.dealTitle}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 font-bold text-[10px] ${badgeClass(f.status)}`}>{f.status}</span>
+                </div>
+                <p className="text-slate-700">{f.subject || f.body}</p>
+                <div className="flex justify-between text-[11px] text-slate-400 border-t border-slate-100 pt-2">
+                  <span>{f.channel}</span>
+                  <span>{f.automated ? 'Automated Sequence' : 'Manual Schedule'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden sm:block overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-[10px]">
+                <tr><th className="p-3">Company / Deal</th><th className="p-3">Channel</th><th className="p-3">Subject / Preview</th><th className="p-3">Type</th><th className="p-3">Status</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {followUps.map((f) => (
+                  <tr key={f.id}>
+                    <td className="p-3 font-semibold">{f.companyName}<div className="text-[11px] font-normal text-slate-500">{f.dealTitle}</div></td>
+                    <td className="p-3">{f.channel}</td>
+                    <td className="p-3 max-w-md truncate">{f.subject || f.body}</td>
+                    <td className="p-3">{f.automated ? 'Automated Sequence' : 'Manual Schedule'}</td>
+                    <td className="p-3">
+                      <span className={`rounded-full px-2 py-0.5 font-bold text-[10px] ${badgeClass(f.status)}`}>{f.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    function AnalyticsView({ deals, stages, users, onExport }) {
+      const wonIds = new Set(stages.filter((s) => s.isWon).map((s) => s.id));
+      const lostIds = new Set(stages.filter((s) => s.isLost).map((s) => s.id));
+      const won = deals.filter((d) => wonIds.has(d.stageId));
+      const lost = deals.filter((d) => lostIds.has(d.stageId));
+      const open = deals.filter((d) => !wonIds.has(d.stageId) && !lostIds.has(d.stageId));
+
+      const totalRev = won.reduce((s, d) => s + Number(d.value), 0);
+      const openVal = open.reduce((s, d) => s + Number(d.value), 0);
+      const weightedVal = Math.round(open.reduce((s, d) => s + Number(d.value) * (d.probability / 100), 0));
+      const convRate = won.length + lost.length > 0 ? ((won.length / (won.length + lost.length)) * 100).toFixed(1) : '0.0';
+      const avgVal = won.length > 0 ? Math.round(totalRev / won.length) : 0;
+      const avgCycle = won.length > 0 ? (won.reduce((s, d) => s + Math.max(1, (new Date(d.closedAt || Date.now()) - new Date(d.createdAt)) / 86400000), 0) / won.length).toFixed(1) : 0;
+
+      const maxRepRev = Math.max(1, ...users.map((u) => won.filter((d) => d.ownerId === u.id).reduce((s, d) => s + Number(d.value), 0)));
+
+      return (
+        <div className="space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg sm:text-xl font-bold">Sales Performance & Funnel Analytics</h1>
+              <p className="text-xs text-slate-500">Live metrics recalculated as you move deals, sign proposals, and record payments.</p>
+            </div>
+            <button onClick={onExport} className="w-full sm:w-auto rounded-xl border border-slate-300 bg-white px-4 py-2.5 sm:py-2 text-xs font-semibold hover:bg-slate-50">⬇ Export CSV Report</button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              ['Total Prospects', deals.length],
+              ['Total Revenue Won', `$${totalRev.toLocaleString()}`],
+              ['Win Conversion Rate', `${convRate}%`],
+              ['Average Deal Value', `$${avgVal.toLocaleString()}`],
+              ['Avg Sales Cycle', `${avgCycle} days`],
+              ['Open Pipeline Value', `$${openVal.toLocaleString()}`],
+              ['Weighted Forecast', `$${weightedVal.toLocaleString()}`],
+              ['Deals Won / Lost', `${won.length} / ${lost.length}`],
+            ].map(([label, val]) => (
+              <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-[11px] font-medium text-slate-500">{label}</p>
+                <p className="mt-1 text-xl font-extrabold text-slate-900">{val}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-5 grid-cols-1 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h3 className="mb-3 text-xs font-bold uppercase text-slate-500">Revenue by Sales Representative</h3>
+              <div className="space-y-3">
+                {users.map((u) => {
+                  const repWon = won.filter((d) => d.ownerId === u.id).reduce((s, d) => s + Number(d.value), 0);
+                  const pct = Math.round((repWon / maxRepRev) * 100);
+                  return (
+                    <div key={u.id} className="text-xs">
+                      <div className="flex flex-wrap justify-between gap-1 font-semibold">
+                        <span>{u.name}</span>
+                        <span>${repWon.toLocaleString()} / Quota ${u.monthlyQuota.toLocaleString()}</span>
+                      </div>
+                      <div className="mt-1 h-2.5 w-full rounded-full bg-slate-100">
+                        <div className="h-2.5 rounded-full bg-indigo-600" style={{ width: `${pct}%` }}></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <h3 className="mb-3 text-xs font-bold uppercase text-slate-500">Lost Deal Analysis</h3>
+              <div className="space-y-2 text-xs">
+                {lost.length === 0 ? <p className="text-slate-400">No lost deals recorded.</p> : lost.map((d) => (
+                  <div key={d.id} className="flex flex-wrap justify-between gap-1 rounded-xl bg-red-50 px-3 py-2">
+                    <span className="font-semibold text-slate-800">{d.lostReason || 'Unspecified'} ({d.customer.companyName})</span>
+                    <span className="font-bold text-red-700">-${Number(d.value).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AdminView({ stages, setStages, users, auditLogs, logAudit, notify }) {
+      const [newStageName, setNewStageName] = useState('');
+
+      const addCustomStage = (e) => {
+        e.preventDefault();
+        if (!newStageName.trim()) return;
+        const nextOrder = Math.max(...stages.map((s) => s.order)) + 1;
+        setStages((prev) => [
+          ...prev,
+          { id: 'st-' + Date.now(), slug: newStageName.toLowerCase().replace(/\s+/g, '-'), name: newStageName, order: nextOrder, defaultProbability: 50, colorHex: '#0EA5E9', isWon: false, isLost: false, isActive: true },
+        ]);
+        logAudit('PIPELINE_STAGE_ADDED', newStageName);
+        setNewStageName('');
+        notify('Custom pipeline stage added!');
+      };
+
+      return (
+        <div className="space-y-5">
+          <h1 className="text-lg sm:text-xl font-bold">Admin Console, Team Permissions & Audit Logs</h1>
+          <div className="grid gap-5 grid-cols-1 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+              <h3 className="text-xs font-bold uppercase text-slate-500">Custom Sales Pipeline Configuration</h3>
+              <form onSubmit={addCustomStage} className="flex flex-col sm:flex-row gap-2">
+                <input value={newStageName} onChange={(e) => setNewStageName(e.target.value)} placeholder="New Stage Name (e.g. Legal Review)" className="flex-1 rounded-lg border border-slate-300 px-3 py-2 sm:py-1.5 text-base sm:text-xs" />
+                <button type="submit" className="rounded-lg bg-indigo-600 px-3 py-2.5 sm:py-1.5 text-xs font-semibold text-white">Add Stage</button>
+              </form>
+              <div className="space-y-1.5 text-xs">
+                {stages.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                    <span className="font-semibold break-words min-w-0">{s.order}. {s.name} ({s.defaultProbability}%)</span>
+                    <span className="shrink-0 text-[11px] text-slate-500">{s.isWon ? 'WON' : s.isLost ? 'LOST' : 'OPEN'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+              <h3 className="text-xs font-bold uppercase text-slate-500">Sales Team Accounts & RBAC Limits</h3>
+              {users.map((u) => (
+                <div key={u.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-slate-100 p-3 text-xs">
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900 truncate">{u.name} ({u.role})</p>
+                    <p className="text-slate-500 truncate">{u.email}</p>
+                  </div>
+                  <div className="sm:text-right shrink-0">
+                    <p className="font-semibold">Quota: ${u.monthlyQuota.toLocaleString()}</p>
+                    <p className="text-slate-500">Max Discount: {u.maxDiscount}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+            <h3 className="mb-3 text-xs font-bold uppercase text-slate-500">Immutable Security & Activity Audit Log</h3>
+            <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 text-xs">
+              {auditLogs.map((l) => (
+                <div key={l.id} className="flex flex-col sm:flex-row sm:justify-between gap-0.5 py-2">
+                  <span className="break-words"><strong className="text-indigo-700">{l.action}</strong> — {l.target} <span className="text-slate-400">by {l.actor}</span></span>
+                  <span className="text-slate-400 text-[11px] shrink-0">{new Date(l.at).toLocaleTimeString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
